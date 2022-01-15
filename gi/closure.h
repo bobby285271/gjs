@@ -12,10 +12,8 @@
 #include <glib-object.h>
 #include <stddef.h>
 
-#include <js/RootingAPI.h>
 #include <js/TypeDecls.h>
 
-#include "gi/utils-inl.h"
 #include "gjs/jsapi-util-root.h"
 #include "gjs/jsapi-util.h"
 #include "gjs/macros.h"
@@ -26,6 +24,10 @@ class HandleValueArray;
 }
 
 namespace Gjs {
+
+struct SignalClosureMeta {
+    unsigned signal_id;
+};
 
 class Closure : public GClosure {
  protected:
@@ -77,17 +79,6 @@ class Closure : public GClosure {
         return self;
     }
 
-    [[nodiscard]] static Closure* create_for_signal(JSContext* cx,
-                                                    JSFunction* callable,
-                                                    const char* description,
-                                                    int signal_id) {
-        auto* self = new Closure(cx, callable, false /* root */, description);
-        self->add_finalize_notifier<Closure>();
-        g_closure_set_meta_marshal(self, gjs_int_to_pointer(signal_id),
-                                   marshal_cb);
-        return self;
-    }
-
     constexpr JSFunction* callable() const { return m_func; }
     [[nodiscard]] constexpr JSContext* context() const { return m_cx; }
     [[nodiscard]] constexpr bool is_valid() const { return !!m_cx; }
@@ -109,6 +100,7 @@ class Closure : public GClosure {
         m_cx = nullptr;
     }
 
+ protected:
     static void marshal_cb(GClosure* closure, GValue* ret, unsigned n_params,
                            const GValue* params, void* hint, void* data) {
         for_gclosure(closure)->marshal(ret, n_params, params, hint, data);
@@ -130,6 +122,30 @@ class Closure : public GClosure {
     //  using if we wanted the closure to survive the context that created it.
     JSContext* m_cx;
     GjsMaybeOwned<JSFunction*> m_func;
+};
+
+class SignalClosure : public Closure {
+ protected:
+    SignalClosureMeta m_meta;
+
+    SignalClosure(JSContext* cx, JSFunction* func, const char* description,
+                  unsigned signal_id)
+        : Closure(cx, func, false, description) {
+        m_meta.signal_id = signal_id;
+
+        g_closure_set_meta_marshal(this, &m_meta, marshal_cb);
+    }
+
+ public:
+    [[nodiscard]] static SignalClosure* create(JSContext* cx,
+                                               JSFunction* callable,
+                                               const char* description,
+                                               unsigned signal_id) {
+        auto* self = new SignalClosure(cx, callable, description, signal_id);
+
+        self->add_finalize_notifier<SignalClosure>();
+        return self;
+    }
 };
 
 }  // namespace Gjs
