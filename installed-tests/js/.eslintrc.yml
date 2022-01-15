@@ -25,6 +25,7 @@ rules:
 overrides:
   - files:
       - matchers.js
+      - dataUtils.js
       - testAsync.js
       - testCairoModule.js
       - testConsole.js
@@ -32,6 +33,8 @@ overrides:
       - testEncoding.js
       - testGLibLogWriter.js
       - testTimers.js
+      - testGObjectClosure.js
+      - testGObjectValue.js
       - modules/importmeta.js
       - modules/exports.js
       - modules/say.js

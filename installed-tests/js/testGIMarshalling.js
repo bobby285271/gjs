@@ -896,12 +896,11 @@ describe('Callback', function () {
     describe('GClosure', function () {
         testInParameter('gclosure', () => 42);
 
-        xit('marshals a GClosure as a return value', function () {
-            // Currently a GObject.Closure instance is returned, upon which it's
-            // not possible to call invoke() because that method takes a bare
-            // pointer as an argument.
-            expect(GIMarshallingTests.gclosure_return()()).toEqual(42);
-        }).pend('https://gitlab.gnome.org/GNOME/gjs/issues/80');
+        it('marshals a GClosure as a return value', function () {
+            const closure = GIMarshallingTests.gclosure_return();
+            expect(closure instanceof GObject.Closure).toBeTruthy();
+            expect(closure.invoke(GObject.TYPE_INT, [])).toEqual(42);
+        });
     });
 
     it('marshals a return value', function () {

@@ -69,8 +69,9 @@ class Closure : public GClosure {
 
     [[nodiscard]] static Closure* create_marshaled(JSContext* cx,
                                                    JSFunction* callable,
-                                                   const char* description) {
-        auto* self = new Closure(cx, callable, true /* root */, description);
+                                                   const char* description,
+                                                   bool root = true) {
+        auto* self = new Closure(cx, callable, root, description);
         self->add_finalize_notifier<Closure>();
         g_closure_set_marshal(self, marshal_cb);
         return self;

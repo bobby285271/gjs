@@ -7,17 +7,22 @@
 
 #include <stdint.h>
 
+#include <girepository.h>
 #include <glib-object.h>
 #include <glib.h>
 
 #include <js/Array.h>  // for JS::GetArrayLength,
 #include <js/CallArgs.h>
+#include <js/ComparisonOperators.h>
 #include <js/PropertySpec.h>
 #include <js/RootingAPI.h>
 #include <js/TypeDecls.h>
-#include <js/Utility.h>  // for UniqueChars
-#include <jsapi.h>       // for JS_GetElement
+#include <js/Utility.h>   // for UniqueChars
+#include <jsapi.h>        // for JS_GetElement
+#include <jsfriendapi.h>  // for JS_GetObjectFunction
 
+#include "gi/boxed.h"
+#include "gi/closure.h"
 #include "gi/gobject.h"
 #include "gi/gtype.h"
 #include "gi/interface.h"
@@ -25,6 +30,7 @@
 #include "gi/param.h"
 #include "gi/private.h"
 #include "gi/repo.h"
+#include "gi/value.h"  // for AutoGValueVector, AutoGValue
 #include "gjs/atoms.h"
 #include "gjs/context-private.h"
 #include "gjs/jsapi-util-args.h"
@@ -239,6 +245,133 @@ static inline void gjs_add_interface(GType instance_type,
 }
 
 GJS_JSAPI_RETURN_CONVENTION
+static bool gjs_value_from_closure(JSContext* cx, Gjs::Closure* closure,
+                                   JS::MutableHandleValue value) {
+    GjsAutoStructInfo info =
+        g_irepository_find_by_gtype(nullptr, G_TYPE_CLOSURE);
+    g_assert(info);
+
+    JS::RootedObject boxed(cx, BoxedInstance::new_for_c_struct(
+                                   cx, info, closure, BoxedInstance::NoCopy()));
+    if (!boxed)
+        return false;
+
+    value.setObject(*boxed);
+    return true;
+}
+
+GJS_JSAPI_RETURN_CONVENTION
+static bool gjs_create_closure(JSContext* cx, unsigned argc, JS::Value* vp) {
+    JS::CallArgs args = JS::CallArgsFromVp(argc, vp);
+
+    JS::RootedObject callable(cx);
+
+    if (!gjs_parse_call_args(cx, "create_closure", args, "o", "callable",
+                             &callable))
+        return false;
+
+    if (!JS_ObjectIsFunction(callable)) {
+        gjs_throw(cx, "create_closure() expects a callable function");
+        return false;
+    }
+
+    JS::RootedFunction func(cx, JS_GetObjectFunction(callable));
+
+    Gjs::Closure* closure =
+        Gjs::Closure::create_marshaled(cx, func, "custom callback", false);
+    if (closure == nullptr)
+        return false;
+
+    g_closure_ref(closure);
+    g_closure_sink(closure);
+
+    GjsAutoStructInfo info =
+        g_irepository_find_by_gtype(nullptr, G_TYPE_CLOSURE);
+    g_assert(info);
+
+    JS::RootedObject boxed(cx,
+                           BoxedInstance::new_for_c_struct(cx, info, closure));
+    g_closure_unref(closure);
+
+    if (!boxed)
+        return false;
+
+    args.rval().setObject(*boxed);
+    return true;
+}
+
+GJS_JSAPI_RETURN_CONVENTION
+static bool gjs_invoke_closure(JSContext* cx, unsigned argc, JS::Value* vp) {
+    JS::CallArgs args = JS::CallArgsFromVp(argc, vp);
+
+    JS::RootedObject closure(cx);
+    JS::RootedObject this_object(cx);
+    JS::RootedObject params(cx);
+    JS::RootedObject return_type(cx);
+
+    if (!gjs_parse_call_args(cx, "invoke_closure", args, "o?oo?o", "closure",
+                             &closure, "this_object", &this_object, "params",
+                             &params, "return_type", &return_type))
+        return false;
+
+    GType gtype;
+
+    if (!gjs_gtype_get_actual_gtype(cx, closure, &gtype))
+        return false;
+
+    if (gtype != G_TYPE_CLOSURE) {
+        gjs_throw(cx, "Expected closure.");
+        return false;
+    }
+
+    Gjs::Closure* gjs_closure = BoxedBase::to_c_ptr<Gjs::Closure>(cx, closure);
+    if (closure == nullptr)
+        return false;
+
+    bool isArray;
+    if (!JS::IsArrayObject(cx, params, &isArray))
+        return false;
+    if (!isArray) {
+        gjs_throw(cx, "No array.");
+        return false;
+    }
+
+    uint32_t length;
+    if (!JS::GetArrayLength(cx, params, &length))
+        return false;
+    JS::RootedValue elem(cx);
+    AutoGValueVector param_values;
+    param_values.reserve(length);
+    for (uint32_t i = 0; i < length; i++) {
+        if (!JS_GetElement(cx, params, i, &elem))
+            return false;
+        Gjs::AutoGValue& value = param_values.emplace_back();
+        if (!gjs_value_to_g_value(cx, elem, &value))
+            return false;
+    }
+
+    if (return_type) {
+        Gjs::AutoGValue return_value;
+        GType return_gtype;
+        if (!gjs_gtype_get_actual_gtype(cx, return_type, &return_gtype))
+            return false;
+        if (return_gtype == G_TYPE_INVALID) {
+            gjs_throw(cx, "Invalid gtype.");
+            return false;
+        }
+        g_value_init(&return_value, return_gtype);
+        g_closure_invoke(gjs_closure, &return_value, param_values.size(),
+                         param_values.data(), nullptr);
+
+        return gjs_value_from_g_value(cx, args.rval(), &return_value);
+    }
+    g_closure_invoke(gjs_closure, nullptr, param_values.size(),
+                     param_values.data(), nullptr);
+    args.rval().setNull();
+    return true;
+}
+
+GJS_JSAPI_RETURN_CONVENTION
 static bool gjs_register_type(JSContext* cx, unsigned argc, JS::Value* vp) {
     JS::CallArgs argv = JS::CallArgsFromVp(argc, vp);
 
@@ -432,6 +565,8 @@ static JSFunctionSpec private_module_funcs[] = {
     JS_FN("register_type", gjs_register_type, 4, GJS_MODULE_PROP_FLAGS),
     JS_FN("signal_new", gjs_signal_new, 6, GJS_MODULE_PROP_FLAGS),
     JS_FN("lookupConstructor", gjs_lookup_constructor, 1, 0),
+    JS_FN("create_closure", gjs_create_closure, 1, GJS_MODULE_PROP_FLAGS),
+    JS_FN("invoke_closure", gjs_invoke_closure, 3, GJS_MODULE_PROP_FLAGS),
     JS_FS_END,
 };
 
