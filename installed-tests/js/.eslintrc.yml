@@ -25,11 +25,13 @@ rules:
 overrides:
   - files:
       - matchers.js
+      - log.js
       - testAsync.js
       - testCairoModule.js
       - testConsole.js
       - testESModules.js
       - testEncoding.js
+      - testEvents.js
       - testGLibLogWriter.js
       - testTimers.js
       - modules/importmeta.js

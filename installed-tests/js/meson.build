@@ -223,7 +223,7 @@ gdbus_test_description = configure_file(
     install_dir: installed_tests_metadir)
 
 if get_option('installed_tests')
-    install_data('matchers.js', 'testGDBus.js',
+    install_data('matchers.js', 'log.js', 'testGDBus.js',
         install_dir: installed_js_tests_dir)
 endif
 
@@ -235,6 +235,7 @@ modules_tests = [
     'Console',
     'ESModules',
     'Encoding',
+    'Events',
     'GLibLogWriter',
     'Timers',
 ]

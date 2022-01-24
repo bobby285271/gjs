@@ -26,8 +26,7 @@ export function arrayLikeWithExactContents(elements) {
          * @returns {string}
          */
         jasmineToString() {
-            return `<arrayLikeWithExactContents(${
-                elements.constructor.name
+            return `<arrayLikeWithExactContents(${elements.constructor.name
             }[${JSON.stringify(Array.from(elements))}]>)`;
         },
     };
