@@ -9,3 +9,6 @@ import '_encoding/encoding';
 import 'console';
 // Bootstrap the Timers API
 import '_timers';
+
+// Install the Repl constructor for Console.interact()
+import 'repl';

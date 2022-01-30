@@ -233,6 +233,7 @@ endif
 modules_tests = [
     'Async',
     'Console',
+    'Repl',
     'ESModules',
     'Encoding',
     'Events',

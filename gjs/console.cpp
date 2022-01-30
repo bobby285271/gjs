@@ -30,6 +30,7 @@ static char *command = NULL;
 static gboolean print_version = false;
 static gboolean print_js_version = false;
 static gboolean debugging = false;
+static gboolean use_interactive_repl = false;
 static gboolean exec_as_module = false;
 static bool enable_profiler = false;
 
@@ -43,6 +44,8 @@ static GOptionEntry entries[] = {
     { "command", 'c', 0, G_OPTION_ARG_STRING, &command, "Program passed in as a string", "COMMAND" },
     { "coverage-prefix", 'C', 0, G_OPTION_ARG_STRING_ARRAY, &coverage_prefixes, "Add the prefix PREFIX to the list of files to generate coverage info for", "PREFIX" },
     { "coverage-output", 0, 0, G_OPTION_ARG_STRING, &coverage_output_path, "Write coverage output to a directory DIR. This option is mandatory when using --coverage-prefix", "DIR", },
+    { "interactive", 'i', 0, G_OPTION_ARG_NONE, &use_interactive_repl,
+        "Start the interactive repl"},
     { "include-path", 'I', 0, G_OPTION_ARG_STRING_ARRAY, &include_path, "Add the directory DIR to the list of directories to search for js files.", "DIR" },
     { "module", 'm', 0, G_OPTION_ARG_NONE, &exec_as_module, "Execute the file as a module." },
     { "profile", 0, G_OPTION_FLAG_OPTIONAL_ARG | G_OPTION_FLAG_FILENAME,
@@ -257,6 +260,7 @@ main(int argc, char **argv)
     print_js_version = false;
     debugging = false;
     exec_as_module = false;
+    use_interactive_repl = false;
     g_option_context_set_ignore_unknown_options(context, false);
     g_option_context_set_help_enabled(context, true);
     if (!g_option_context_parse_strv(context, &gjs_argv, &error)) {
@@ -293,9 +297,19 @@ main(int argc, char **argv)
             exit(1);
         }
 
-        script = g_strdup("const Console = imports.console; Console.interact();");
-        len = strlen(script);
-        filename = "<stdin>";
+        if (use_interactive_repl) {
+            script = nullptr;
+            exec_as_module = true;
+            filename =
+                "resource:///org/gnome/gjs/modules/esm/_bootstrap/repl.js";
+            interactive_mode = true;
+        } else {
+            script = g_strdup(
+                "const Console = imports.console; Console.interact();");
+            filename = "<stdin>";
+            len = strlen(script);
+        }
+
         program_name = gjs_argv[0];
         interactive_mode = true;
     } else {

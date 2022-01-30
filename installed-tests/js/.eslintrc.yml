@@ -33,6 +33,7 @@ overrides:
       - testEncoding.js
       - testEvents.js
       - testGLibLogWriter.js
+      - testRepl.js
       - testTimers.js
       - modules/importmeta.js
       - modules/exports.js
