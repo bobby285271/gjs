@@ -456,6 +456,8 @@ function _promisify(proto, asyncFunc,
 function _init() {
     Gio = this;
 
+    Gio.Application.prototype.runAsync = GLib.MainLoop.prototype.runAsync;
+
     Gio.DBus = {
         get session() {
             return Gio.bus_get_sync(Gio.BusType.SESSION, null);

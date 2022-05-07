@@ -65,6 +65,7 @@ class GjsContextPrivate : public JS::JobQueue {
  private:
     GjsContext* m_public_context;
     JSContext* m_cx;
+    JS::Heap<JSFunction*> m_main_loop_hook;
     JS::Heap<JSObject*> m_global;
     JS::Heap<JSObject*> m_internal_global;
     std::thread::id m_owner_thread;
@@ -176,6 +177,20 @@ class GjsContextPrivate : public JS::JobQueue {
     [[nodiscard]] GjsContext* public_context() const {
         return m_public_context;
     }
+    [[nodiscard]] bool set_main_loop_hook(JSFunction* callback) {
+        if (!callback) {
+            m_main_loop_hook = callback;
+            return true;
+        }
+
+        if (m_main_loop_hook)
+            return false;
+
+        m_main_loop_hook = callback;
+        return true;
+    }
+    [[nodiscard]] bool has_main_loop_hook() { return !!m_main_loop_hook; }
+    GJS_JSAPI_RETURN_CONVENTION bool run_main_loop_hook();
     [[nodiscard]] JSContext* context() const { return m_cx; }
     [[nodiscard]] JSObject* global() const { return m_global.get(); }
     [[nodiscard]] JSObject* internal_global() const {
